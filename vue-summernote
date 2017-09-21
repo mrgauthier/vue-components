@@ -1,0 +1,63 @@
+Vue.component('vue-summernote', {
+    template: '<div class=\"vue-summernote\">\n    <div v-bind:class=\"identifier\" v-html=\"html\"></div>\n</div>',
+        data: function(){
+            return {
+                    identifier: null, 
+                    internal_html: null,
+            }
+        },
+        computed: {
+        },
+        props: ['html', 'active'],
+        methods: {
+            init: function(){
+                this.internal_html = this.html;
+            },
+            setActive: function(val){
+                if(val){     
+                    this_vue = this; 
+                    this.$nextTick(function(){                    
+                        $('.'+this.identifier).summernote({ 
+                            enable: true,
+                            callbacks: {
+                                onChange: function(contents, $editable) {                                
+                                    this_vue.internal_html = contents.replace(/\<p\>\<br\>\<\/p\>/, '');
+                                }
+                            }
+                        });            
+                    })
+                }
+                else{
+                    $('.'+this.identifier).summernote('destroy'); 
+                }
+            }
+        },            
+
+        mounted:function(){                
+            this.$nextTick(function(){
+                this.init();
+                this.$nextTick(function(){
+                    this.identifier = 'summernote-'+this._uid.toString();
+                    this.setActive(this.active);  
+                });
+            });
+        },
+        watch: {
+            internal_html: function(val) {
+                this.$emit('input', this.internal_html);
+            },
+            active: function(val){
+                this.setActive(val);
+            }
+        },
+
+    });
+
+
+/* <!-- TEMPLATE -->
+
+<div class="vue-summernote">
+    <div v-bind:class="identifier" v-html="html"></div>
+</div>
+
+*/
