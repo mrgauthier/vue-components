@@ -1,0 +1,23 @@
+Vue.component('vue-pikaday', {
+        template: '<input type="text" v-on:change="onInput" v-bind:class="{\'form-control\': bootstrap}"/>',
+        // props: ['tracking'],
+        data: function(){
+            return {
+            }
+        },
+        props: ['date','bootstrap'],
+        methods: {
+            onInput: function (event) {
+              this.$emit('input', event.target.value)
+            }
+        },            
+
+        mounted:function(){                
+            this.$nextTick(function(){
+                var picker = new Pikaday({
+                    field: this.$el,
+                });
+            });
+        }
+
+    });
