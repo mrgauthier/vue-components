@@ -1,0 +1,353 @@
+Vue.component('vue-table', {
+    template: '<div class=\"vue-table\">\n    <div class=\"row\">\n    </div>\n    <div class=\"row\">\n        <div class=\"col-sm-6 col-xs-12\">\n            <label style=\"white-space:nowrap; margin-right: 20px\"><span> Show </span>\n                <select name=\"trainings_length\" aria-controls=\"trainings\" class=\"form-control input-sm\" v-model=\"num_per_page_selected\" style=\"display:inline-block; max-width:40px\">\n                    <option v-bind:value=\"5\">5</option>\n                    <option v-bind:value=\"10\">10</option>\n                    <option v-bind:value=\"25\">25</option>\n                    <option v-bind:value=\"50\">50</option>\n                    <option v-bind:value=\"-1\">All</option>\n                </select> <span> of {{num_records}} Records </span>\n            </label>\n                <button class=\"btn btn-default btn-sm\" v-on:click=\"saveTo(\'csv\')\" style=\"\"> Save to CSV </button>\n        \n        </div>\n\n        \n        <div class=\"col-sm-6 col-xs-12\">\n            <span style=\"float:right; vertical-align:middle; color: black\">\n                <input type=\"text\" v-model=\"search_key\" placeholder=\"Search\" />\n            </span>\n        </div>\n    </div>\n    <div class=\"table-container\">\n        <template v-if=\"!disable_filters\">\n            <div class=\"expand-filter\" v-on:click=\"toggleFilterMenu()\" v-bind:class=\"{visible: !show_filter_menu}\">\n                <i class=\"material-icons mouse-pointer\"> filter_list </i>\n            </div>\n\n            <div class=\"filter-menu\" v-bind:class=\"{visible: show_filter_menu}\">\n                 <div class=\"collapse-filter\" v-on:click=\"toggleFilterMenu()\">\n                    <i class=\"material-icons mouse-pointer\"> close </i>\n                </div>\n                <h4> Hide Columns </h4>\n                <ul>\n                    <li v-for=\"header in table_headers\">\n                        <input type=\"checkbox\" v-bind:id=\"header.field\" v-bind:value=\"header.name\" v-model=\"hidden_fields\"> <label> {{header.name}} </label>\n                    </li>\n                </ul>\n                <h4> Filter Columns By </h4>\n                <ul>\n                    <template v-for=\"filter in child_table_filters\">\n                        <template v-if=\"filter.type == \'select\'\" >\n                            <li>\n                            <h5> {{filter.name}} </h5>\n                            <ul>\n                            <template v-for=\"option in filter.values\">                            \n                                <li>\n                                    <input type=\"checkbox\" v-bind:value=\"option\" v-model=\"filter.active\" /> <label> {{option}} </label>                            \n                                </li>\n                            </template>\n                            </ul>\n                            </li>\n                        </template>\n                    </template>\n                </ul>            \n            </div>\n        </template>\n        <table id=\"\" width=\"100%\" v-bind:class=\"bootstrap_styles\">\n            <thead>\n                <tr>\n                <th v-for=\"header in filtered_table_headers\" > \n                    <a href=\"\" v-on:click=\"sortBy(header.field, $event)\"> {{header.name}} </a> \n                    <i class=\"fa fa-caret-up\" v-show=\"showSortBy(header.field, \'up\')\"></i>\n                    <i class=\"fa fa-caret-down\" v-show=\"showSortBy(header.field, \'down\')\"></i>\n                </th>\n                </tr>\n            </thead>\n            <tbody>\n                <tr v-for=\"row in paged_data\">\n                    <td v-for=\"header in filtered_table_headers\"> \n                        <div v-if=\"header.type != \'html\'\">\n                            {{renderValue(row, header.field)}} \n                        </div>\n                        <div v-else v-html=\"renderValue(row, header.field)\">\n                            \n                        </div>\n                    </td>\n                </tr>\n            </tbody>\n        </table>\n        <nav aria-label=\"Page navigation\" style=\"float:right\">\n            <ul class=\"pagination\">\n                <li class=\"mouse-pointer\" v-on:click=\"jumpToPagenation(1)\" v-show=\"current_page > 1\">\n                    <span aria-hidden=\"true\" class=\"fa fa-angle-double-left\"></span>\n                </li>\n                <li class=\"mouse-pointer\" v-on:click=\"jumpToPagenation(current_page - 1)\" v-show=\"current_page > 1\">\n                    <span aria-hidden=\"true\" class=\"fa fa-angle-left\"></span>\n                </li>\n                <li class=\"mouse-pointer\" v-for=\"page in num_pages\" v-bind:class=\"[page == current_page ? \'active\' : \'\']\"><span v-on:click=\"jumpToPagenation(page)\" v-show=\"showPagenationLink(page)\"> {{page}} </span>\n                </li>\n                <li class=\"mouse-pointer\" v-on:click=\"jumpToPagenation(current_page + 1)\" v-show=\"current_page < num_pages\">\n                    <span aria-hidden=\"true\" class=\"fa fa-angle-right\"></span>\n                </li>\n                <li class=\"mouse-pointer\" v-on:click=\"jumpToPagenation(num_pages)\" v-show=\"current_page < num_pages\">\n                    <span aria-hidden=\"true\" class=\"fa fa-angle-double-right\"></span>\n                </li>\n            </ul>\n        </nav>\n    </div>\n</div>',
+        // props: ['tracking'],
+        data: function(){
+            return {
+                    current_page: 1,
+                    num_per_page_selected: 10,
+                    sort_by: null,
+                    sort_order: 1,
+                    search_key: '',                    
+                    filters: [],
+                    hidden_fields: [],
+                    show_filter_menu: false,
+                    child_table_filters: this.table_filters,
+            }
+        },
+        computed: {
+
+            filtered_table_headers: function(){
+                var hidden_fields = this.hidden_fields;
+                _.each(this.table_headers, function(value, key){
+                    value.visible = _.indexOf(hidden_fields, value.name ) > -1 ? false : true;
+                });
+
+                var filtered_table_headers = _.filter(this.table_headers, function(header){                  
+                    return header.visible;
+                });
+
+                return filtered_table_headers;
+
+            },
+            bootstrap_styles: function(){
+                if(this.bootstrap == undefined || !this.bootstrap){
+                    return {};
+                }
+                else{
+                    return {
+                        'table': true,
+                        'table-striped': true,
+                        'table-bordered': true,
+                        'table-responsive': true,
+                    }
+                }
+            },
+            first_name: function(){
+                console.log(this.table_data);
+                console.log(this.table_headers);
+                return _.isUndefined(this.table_data[0]) ? null : this.table_data[0].name;
+            },
+            filtered_data: function(){
+                var filtered_data = [];
+
+                //return everything if empty search key
+                if (_.isUndefined(this.table_data) || _.isEmpty(this.search_key)) {
+                    filtered_data = this.table_data;
+                } else {
+
+                    var default_keys = _.pluck(this.table_headers, 'field');
+                    keys = default_keys;
+
+                    var options = {
+                        shouldSort: true,
+                        threshold: .4,
+                        Location: 8,
+                        distance: 100,
+                        maxPatternLength: 32,
+                        keys: keys,
+                    };
+
+                    var fuse = new Fuse(this.table_data, options);
+                    filtered_data = fuse.search(this.search_key);
+                }
+
+                if (_.isEmpty(filtered_data)) {
+                    return filtered_data;
+                }       
+
+                //look at active filters and filter that as well
+                var matched_results = [];
+                var table_filters = this.child_table_filters;
+                _.each(table_filters, function(filter, key){
+                    if(!_.isEmpty(filter.active)){
+                        _.each(filter.active, function(value, key){
+                            var search_key = filter.field;
+                            matched_results.push(_.filter(filtered_data, function(faculty){
+                                return s.include(faculty.department_list.toLowerCase(), value.toLowerCase());
+                            }));
+                        });
+
+                        filtered_data = _.uniq(_.flatten(matched_results));
+                    }
+                });
+
+                return filtered_data;
+            },
+            paged_data: function() {
+                var num_pages = parseInt(this.num_pages);
+                var offset = (this.current_page - 1) * this.num_per_page;
+                var paged_data = this.num_per_page < 0 ? this.filtered_data : this.filtered_data.slice(offset, (offset + this.num_per_page));
+                return paged_data;
+            },
+            num_pages: function() {
+                return Math.ceil(this.filtered_data.length / this.num_per_page);
+            },
+
+            num_records: function(){
+                return this.filtered_data.length;
+            },
+
+            num_per_page: function() {
+                return this.num_per_page_selected == -1 ? 100000 : this.num_per_page_selected;
+            },
+
+            truncate_pagenation: function() {
+                return this.num_pages > 7 ? true : false
+            },
+        },
+        props: ['table_headers', 'table_data', 'table_filters', 'bootstrap', 'disable_filters'],
+        methods: {
+            onInput: function (event) {
+              //this.$emit('input', event.target.value)
+            },
+            saveTo: function(type) {
+
+                var fields = _.pluck(this.table_headers, 'field');
+                //remove action field if it exists
+                fields = _.without(fields, 'action');
+                var data = _.map(this.filtered_data, function(row){
+                    var stripped_row = _.mapObject(row, function(value, key){
+                        //convert html lists to comma seperated lists
+                        if(typeof(value) == 'string' && value.includes('<ol>')){
+                            value = value.replace('<ol>', '<ul>');
+                        }
+                        if(typeof(value) == 'string' && value.includes('<ul>')){
+                            var $ul = $(value).html(value).find('ul').first();
+                            var ul_csv = HELPERS.ul2Csv($ul);
+                            return ul_csv;
+                        }
+                        else{
+                            return $('<div/>').html(value).text();
+                        }
+                    });
+
+                    return stripped_row;
+                });
+
+                switch (type) {
+                    case 'csv':
+                        var csv = json2csv({
+                            data: data,
+                            fields: fields
+                        });
+                        var file = new File([csv], {
+                            type: "text/csv;charset=utf-8"
+                        });
+                        saveAs(file, "data.csv");
+                        break;
+                }
+
+            },
+            sortBy: function(sort_by, event) {
+                this.sort_order = sort_by == this.sort_by ? -this.sort_order : 1;
+                this.sort_by = sort_by;
+
+                this.table_data = this.sort_order > 0 ? _.sortBy(this.table_data, sort_by) : _.sortBy(this.table_data, sort_by).reverse();
+
+                if(event){
+                    event.preventDefault();
+                }
+                return false;
+            },   
+            showSortBy: function(sort_by, direction){
+                return direction == 'down' ? this.sort_by == sort_by && this.sort_order < 0 : this.sort_by == sort_by && this.sort_order > 0;
+            },
+            showPagenationLink: function(page) {
+                if (this.truncate_pagenation) {
+                    if (this.current_page < 3) {
+                        //show 1 - 5
+                        if (page < 5) {
+                            return true;
+                        } else {
+                            return false;
+                        }
+                    }
+                    if (this.current_page >= 3) {
+                        if (page > this.current_page - 3 && page <= this.current_page) {
+                            return true;
+                        } else if (page >= this.current_page && page < this.current_page + 3) {
+                            return true;
+                        }
+                    }
+                    if (this.current_page > this.num_pages - 3) {
+                        if (page >= this.num_pages - 5) {
+                            return true;
+                        } else {
+                            return false;
+                        }
+                    }
+
+                } else {
+                    return true;
+                }
+
+                return false;
+            },
+
+            jumpToPagenation: function(page){
+                this.current_page = page;
+            },
+
+            updatePagenation: function() {
+                if(this.num_pages == 0){
+                    return false;
+                }
+                else if (this.current_page > this.num_pages) {
+                    this.current_page--;
+                    this.updatePagenation();
+                }
+                else if ( this.current_page < 1){
+                    this.current_page++;
+                }
+            },  
+            toggleFilterMenu: function(){
+                this.show_filter_menu = !this.show_filter_menu;
+            },
+            renderValue(row, field){
+                value = field.split('.').reduce(function(obj,i) { return obj[i]}, row);    
+                return value;
+            }
+        },            
+
+        mounted:function(){                
+            this.$nextTick(function(){
+            });
+        },
+        watch: {
+            paged_data: function(val) {
+                this.updatePagenation();
+                this.$emit('data-change');
+            },
+          
+        },
+
+    });
+
+
+/* <!-- TEMPLATE -->
+
+<div class="vue-table">
+    <div class="row">
+    </div>
+    <div class="row">
+        <div class="col-sm-6 col-xs-12">
+            <label style="white-space:nowrap; margin-right: 20px"><span> Show </span>
+                <select name="trainings_length" aria-controls="trainings" class="form-control input-sm" v-model="num_per_page_selected" style="display:inline-block; max-width:40px">
+                    <option v-bind:value="5">5</option>
+                    <option v-bind:value="10">10</option>
+                    <option v-bind:value="25">25</option>
+                    <option v-bind:value="50">50</option>
+                    <option v-bind:value="-1">All</option>
+                </select> <span> of {{num_records}} Records </span>
+            </label>
+                <button class="btn btn-default btn-sm" v-on:click="saveTo('csv')" style=""> Save to CSV </button>
+        
+        </div>
+
+        
+        <div class="col-sm-6 col-xs-12">
+            <span style="float:right; vertical-align:middle; color: black">
+                <input type="text" v-model="search_key" placeholder="Search" />
+            </span>
+        </div>
+    </div>
+    <div class="table-container">
+        <template v-if="!disable_filters">
+            <div class="expand-filter" v-on:click="toggleFilterMenu()" v-bind:class="{visible: !show_filter_menu}">
+                <i class="material-icons mouse-pointer"> filter_list </i>
+            </div>
+
+            <div class="filter-menu" v-bind:class="{visible: show_filter_menu}">
+                 <div class="collapse-filter" v-on:click="toggleFilterMenu()">
+                    <i class="material-icons mouse-pointer"> close </i>
+                </div>
+                <h4> Hide Columns </h4>
+                <ul>
+                    <li v-for="header in table_headers">
+                        <input type="checkbox" v-bind:id="header.field" v-bind:value="header.name" v-model="hidden_fields"> <label> {{header.name}} </label>
+                    </li>
+                </ul>
+                <h4> Filter Columns By </h4>
+                <ul>
+                    <template v-for="filter in child_table_filters">
+                        <template v-if="filter.type == 'select'" >
+                            <li>
+                            <h5> {{filter.name}} </h5>
+                            <ul>
+                            <template v-for="option in filter.values">                            
+                                <li>
+                                    <input type="checkbox" v-bind:value="option" v-model="filter.active" /> <label> {{option}} </label>                            
+                                </li>
+                            </template>
+                            </ul>
+                            </li>
+                        </template>
+                    </template>
+                </ul>            
+            </div>
+        </template>
+        <table id="" width="100%" v-bind:class="bootstrap_styles">
+            <thead>
+                <tr>
+                <th v-for="header in filtered_table_headers" > 
+                    <a href="" v-on:click="sortBy(header.field, $event)"> {{header.name}} </a> 
+                    <i class="fa fa-caret-up" v-show="showSortBy(header.field, 'up')"></i>
+                    <i class="fa fa-caret-down" v-show="showSortBy(header.field, 'down')"></i>
+                </th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr v-for="row in paged_data">
+                    <td v-for="header in filtered_table_headers"> 
+                        <div v-if="header.type != 'html'">
+                            {{renderValue(row, header.field)}} 
+                        </div>
+                        <div v-else v-html="renderValue(row, header.field)">
+                            
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+        <nav aria-label="Page navigation" style="float:right">
+            <ul class="pagination">
+                <li class="mouse-pointer" v-on:click="jumpToPagenation(1)" v-show="current_page > 1">
+                    <span aria-hidden="true" class="fa fa-angle-double-left"></span>
+                </li>
+                <li class="mouse-pointer" v-on:click="jumpToPagenation(current_page - 1)" v-show="current_page > 1">
+                    <span aria-hidden="true" class="fa fa-angle-left"></span>
+                </li>
+                <li class="mouse-pointer" v-for="page in num_pages" v-bind:class="[page == current_page ? 'active' : '']"><span v-on:click="jumpToPagenation(page)" v-show="showPagenationLink(page)"> {{page}} </span>
+                </li>
+                <li class="mouse-pointer" v-on:click="jumpToPagenation(current_page + 1)" v-show="current_page < num_pages">
+                    <span aria-hidden="true" class="fa fa-angle-right"></span>
+                </li>
+                <li class="mouse-pointer" v-on:click="jumpToPagenation(num_pages)" v-show="current_page < num_pages">
+                    <span aria-hidden="true" class="fa fa-angle-double-right"></span>
+                </li>
+            </ul>
+        </nav>
+    </div>
+</div>
+
+*/
